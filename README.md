@@ -8,6 +8,7 @@ own folder with its own README and ships as something I actually use, not a demo
 | # | Project | What it is | Status |
 |---|---------|------------|--------|
 | 01 | [**AI Pilled Voice**](voice/) | Local, offline push-to-talk dictation for Linux/GNOME — talk to Claude Code (or any window). faster-whisper + ydotool, no cloud. | ✅ shipped, in daily use |
+| 02 | [**Meeting Recorder**](meeting/) | Super+R records mic + system audio, live-transcribes in ~20s chunks, and appends an LLM summary on stop. Triple-watchdog: fails loud, never silently. | ✅ shipped, in daily use |
 
 ## Rules
 
