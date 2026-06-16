@@ -1,0 +1,14 @@
+[Unit]
+Description=ydotoold — virtual input daemon for ydotool
+Documentation=man:ydotoold(8)
+After=systemd-user-sessions.service
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/sbin/modprobe uinput
+ExecStart=/usr/bin/ydotoold -p /run/ydotoold.sock -P 0660 -o 1000:1000
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

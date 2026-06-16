@@ -1,0 +1,14 @@
+# Runtime logs (regenerated on every run)
+*.log
+
+# Local STT virtualenv (faster-whisper) — recreated by the installer
+.venv/
+
+# Recorded audio / runtime scratch (normally under $XDG_RUNTIME_DIR, never here)
+*.wav
+*.pid
+
+# OS / editor cruft
+.DS_Store
+*.swp
+__pycache__/

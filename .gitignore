@@ -1,0 +1,13 @@
+# Logs / runtime scratch
+*.log
+*.wav
+*.pid
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS / editor
+.DS_Store
+*.swp
