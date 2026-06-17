@@ -11,3 +11,14 @@ __pycache__/
 # OS / editor
 .DS_Store
 *.swp
+
+# Session / agent scratch that lands in this dir but is NOT a build
+.claude/
+
+# Other-instance lane artifacts that appear here — keep them OUT of this public
+# repo so private business content can never be published by an accidental
+# `git add -A`. Builds are added by explicit path, never by a blanket add.
+ea-audit/
+second-brain-service/
+day-01-ea-daily-audit.html
+*-audit.html
