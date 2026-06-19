@@ -29,6 +29,10 @@ fi
 # should already have alarmed). Clear state and start fresh.
 rm -f "$PIDFILE" "$STOPPED" "$RUNTIME/meeting-rec.ffmpeg.pid"
 
+# The supervisor takes its own systemd-inhibit lock (sleep/idle/lid) for exactly
+# the duration of active recording, so the machine can't suspend mid-call but is
+# free to sleep again the moment recording stops — even while the saved-transcript
+# window is left open for reading.
 setsid python3 "$DIR/supervisor.py" >>"$LOG" 2>&1 &
 SUP=$!
 

@@ -8,6 +8,7 @@ set -u
 RUNTIME="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 PIDFILE="$RUNTIME/meeting-rec.pid"
 FFPIDFILE="$RUNTIME/meeting-rec.ffmpeg.pid"
+INHPIDFILE="$RUNTIME/meeting-rec.inhibit.pid"
 STOPPED="$RUNTIME/meeting-rec.stopped"
 SND=/usr/share/sounds/freedesktop/stereo
 
@@ -23,6 +24,10 @@ while sleep 2; do
     FFPID="$(cat "$FFPIDFILE" 2>/dev/null)"
     [[ -n "${FFPID:-}" ]] && kill -9 "$FFPID" 2>/dev/null
     rm -f "$FFPIDFILE"
+    # release the suspend lock the dead supervisor was holding
+    INHPID="$(cat "$INHPIDFILE" 2>/dev/null)"
+    [[ -n "${INHPID:-}" ]] && kill "$INHPID" 2>/dev/null
+    rm -f "$INHPIDFILE"
     MSG=$'Meeting recorder process DIED unexpectedly.\nRecording and transcription have STOPPED.\nPartial files are in ~/Meetings/latest'
     notify-send -a "Meeting Recorder" -u critical "⚠ MEETING RECORDING STOPPED" "$MSG" || true
     ( for _ in 1 2 3 4 5 6; do paplay "$SND/alarm-clock-elapsed.oga" 2>/dev/null; done ) &
