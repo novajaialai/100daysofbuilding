@@ -703,6 +703,9 @@ class Recorder(Gtk.Application):
 
     # ---------------- stop ----------------
     def request_stop(self, *_):
+        if self.done:  # already saved — a signal (logout, script) should close it
+            self.quit()
+            return False
         if self.finalizing or self.failed:
             if self.failed:  # allow closing a failed session
                 self.clean_exit(failed=True)
