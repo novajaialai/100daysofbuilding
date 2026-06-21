@@ -48,16 +48,39 @@ Any call **happening on the laptop** already works out of the box, because the
 other side comes through system audio and you come through the mic:
 
 - **Softphone / VoIP** (Google Voice, Zoom Phone, Skype, a browser dialer) —
-  works today, no setup.
-- **Phone over Bluetooth** — pair the phone to the laptop as a headset (HFP);
-  both call directions then route through the laptop's audio. Note HFP usually
-  drops mic quality to ~8 kHz.
-- **Phone via cable/dongle** — a USB audio interface or line-in brings the phone
-  in as an input device; set it as the default source/monitor and it's captured
-  like any other call.
+  works today, no setup. Just press Super+R.
 
-(A call that stays entirely on the handset, never touching the laptop, can't be
-captured — the audio has to reach the laptop somehow.)
+For an **actual cellphone call**, the phone's audio has to reach the laptop, and
+then you point the recorder at that source as the **far end (Them)**:
+
+```bash
+~/meeting/meeting.sh sources   # list inputs, annotated — find the phone's source
+~/meeting/meeting.sh phone     # auto-pick a Bluetooth/line-in source + record
+```
+
+Two ways to bridge the phone in:
+
+- **Bluetooth (HFP)** — pair the phone to the laptop as a headset. It then shows
+  up in `meeting.sh sources` as a `bluez_input.*` (PipeWire) or `bluez_source.*`
+  source. `meeting.sh phone` finds it automatically. Your voice stays on the
+  laptop mic (You); the far end comes from the Bluetooth source (Them). Note HFP
+  usually drops audio to ~8–16 kHz.
+- **Cable / USB / line-in** — a USB audio interface or line-in dongle brings the
+  phone in as an input device (best quality). Find its name in `meeting.sh
+  sources` and use it.
+
+Pick the source explicitly when you want control:
+
+```bash
+MEETING_FAR_SOURCE=bluez_input.XX_XX_XX_XX_XX_XX ~/meeting/meeting.sh   # far end = phone
+MEETING_MIC_SOURCE=<some-source> ~/meeting/meeting.sh                   # if your mic isn't default
+```
+
+A bad source name **fails loudly at startup** (it won't silently record nothing).
+
+(A call that stays entirely on the handset, never bridged to the laptop, can't be
+captured — the audio has to reach the laptop somehow.) See `ROADMAP.md` for the
+bigger picture.
 
 ## Fails loudly — three layers
 
@@ -75,11 +98,12 @@ captured — the audio has to reach the laptop somehow.)
 
 ## Files
 
-- `meeting.sh` — Super+R toggle (GNOME custom keybinding `custom2`), runs the
-  supervisor under `systemd-inhibit`
+- `meeting.sh` — Super+R toggle (GNOME custom keybinding `custom2`); also
+  `meeting.sh sources` (list inputs) and `meeting.sh phone` (record a bridged phone)
 - `supervisor.py` — GTK4 window + dual-stream ffmpeg recorder + faster-whisper
   transcriber + internal watchdog
 - `watchdog.sh` — external process watchdog
+- `ROADMAP.md` — where the recorder started, is now, and is going
 - `meeting.log` — supervisor stderr (check here after an alarm)
 - per-session `recorder.log` — ffmpeg errors; `mic/` + `sys/` hold the raw chunks
 
@@ -94,6 +118,10 @@ captured — the audio has to reach the laptop somehow.)
   skipped (default 60)
 - `MEETING_SPEAKER_MIC` / `MEETING_SPEAKER_SYS` — transcript labels
   (default `You` / `Them`)
+- `MEETING_FAR_SOURCE` — the far-end (Them) audio source (default: the default
+  sink's `.monitor`). Set to a `bluez_input.*` / line-in / USB source to record a
+  bridged phone. List names with `meeting.sh sources`.
+- `MEETING_MIC_SOURCE` — your (You) audio source (default: `default`)
 - `MEETING_DISK_WARN_MB` / `MEETING_DISK_FAIL_MB` — low-disk warn / hard-stop
   thresholds (default 2048 / 400)
 

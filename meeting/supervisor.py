@@ -38,6 +38,12 @@ SILENCE_CHUNKS = int(os.environ.get("MEETING_SILENCE_CHUNKS", "3"))
 # Speaker labels. Mic = you; system audio = whoever is on the other end.
 SPK_MIC = os.environ.get("MEETING_SPEAKER_MIC", "You")
 SPK_SYS = os.environ.get("MEETING_SPEAKER_SYS", "Them")
+# Audio sources (PulseAudio/PipeWire source names). Empty => the defaults:
+#   mic  = "default" source, far end = the default sink's .monitor.
+# Override the far end to capture a phone bridged in over Bluetooth (HFP, a
+# bluez_source.*) or a line-in/USB device; override the mic if hers isn't default.
+MIC_SOURCE = os.environ.get("MEETING_MIC_SOURCE", "").strip()
+FAR_SOURCE = os.environ.get("MEETING_FAR_SOURCE", "").strip()
 # Peak (0..32767) below which a chunk is treated as silence and NOT sent to
 # whisper — halves CPU on a normal call (one person talks at a time) and stops
 # whisper hallucinating words onto room tone. Keeps dual-stream realtime-safe.
@@ -178,6 +184,16 @@ def mmss(seconds):
     return f"{seconds // 60}:{seconds % 60:02d}"
 
 
+def pulse_sources():
+    """Names of available PulseAudio/PipeWire sources (empty set if unknowable)."""
+    try:
+        out = subprocess.check_output(["pactl", "list", "short", "sources"],
+                                      text=True, timeout=5)
+        return {ln.split("\t")[1] for ln in out.splitlines() if "\t" in ln}
+    except Exception:
+        return set()
+
+
 class Recorder(Gtk.Application):
     def __init__(self):
         super().__init__(application_id="dev.jake.call-meeting-recorder",
@@ -206,12 +222,44 @@ class Recorder(Gtk.Application):
         self.session = os.path.join(MEETINGS, stamp)
         self.mic_dir = os.path.join(self.session, "mic")
         self.sys_dir = os.path.join(self.session, "sys")
+        self.transcript = os.path.join(self.session, "transcript.md")
+
+        # Resolve the two capture sources. Defaults reproduce today's behavior:
+        # mic = "default", far end = the default sink's .monitor. Either can be
+        # overridden (e.g. a phone bridged in over Bluetooth or line-in).
+        far_default = None
+        if not FAR_SOURCE:
+            try:
+                sink = subprocess.check_output(
+                    ["pactl", "get-default-sink"], text=True, timeout=5).strip()
+                if not sink:
+                    raise RuntimeError("pactl returned no default sink")
+                far_default = f"{sink}.monitor"
+            except Exception as e:
+                self.startup_fail(f"Could not find audio output to capture: {e}")
+                return
+        self.mic_in = MIC_SOURCE or "default"
+        self.far_in = FAR_SOURCE or far_default
+
+        # Validate any explicitly-named source so a typo/unplugged device fails
+        # loudly at startup instead of recording silence.
+        named = pulse_sources()
+        for src, env in ((MIC_SOURCE, "MEETING_MIC_SOURCE"),
+                         (FAR_SOURCE, "MEETING_FAR_SOURCE")):
+            if src and named and src not in named:
+                self.startup_fail(
+                    f"{env}='{src}' is not an available audio source. "
+                    "Run  ~/meeting/meeting.sh sources  to list valid names.")
+                return
+
+        # Sources are valid — now create the session dir and transcript.
         os.makedirs(self.mic_dir, exist_ok=True)
         os.makedirs(self.sys_dir, exist_ok=True)
-        self.transcript = os.path.join(self.session, "transcript.md")
+        far_note = (f"other side ({self.far_in})" if FAR_SOURCE
+                    else "other side (system audio)")
         with open(self.transcript, "w") as f:
             f.write(f"# Call / Meeting {stamp}\n\n"
-                    f"*{SPK_MIC} = mic · {SPK_SYS} = other side (system audio)*\n\n")
+                    f"*{SPK_MIC} = mic · {SPK_SYS} = {far_note}*\n\n")
         latest = os.path.join(MEETINGS, "latest")
         try:
             if os.path.islink(latest):
@@ -220,15 +268,6 @@ class Recorder(Gtk.Application):
         except OSError:
             pass
 
-        try:
-            sink = subprocess.check_output(
-                ["pactl", "get-default-sink"], text=True, timeout=5).strip()
-            if not sink:
-                raise RuntimeError("pactl returned no default sink")
-        except Exception as e:
-            self.startup_fail(f"Could not find audio output to capture: {e}")
-            return
-
         # One ffmpeg, two pulse inputs, two segmented outputs that cut at the
         # same wall-clock instants — so chunk i in mic/ and sys/ cover the same
         # window and can be merged by timestamp.
@@ -236,8 +275,8 @@ class Recorder(Gtk.Application):
                "-reset_timestamps", "1"]
         enc = ["-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le"]
         cmd = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
-               "-f", "pulse", "-i", "default",            # 0: microphone (You)
-               "-f", "pulse", "-i", f"{sink}.monitor",    # 1: system (Them)
+               "-f", "pulse", "-i", self.mic_in,   # 0: microphone (You)
+               "-f", "pulse", "-i", self.far_in,   # 1: far end (Them)
                "-map", "0:a", *enc, *seg,
                os.path.join(self.mic_dir, "chunk_%05d.wav"),
                "-map", "1:a", *enc, *seg,
