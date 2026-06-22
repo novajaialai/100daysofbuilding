@@ -8,12 +8,17 @@ DIR="$HOME/voice"
 RUNTIME="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 WAV="$RUNTIME/voice-rec.wav"
 PIDFILE="$RUNTIME/voice-rec.pid"
+MICFILE="$RUNTIME/voice-rec.mic"      # records which mic START used, for the STOP guard message
 LOG="$DIR/voice.log"
+
+# shellcheck source=lib-mic.sh
+source "$DIR/lib-mic.sh"              # choose_mic (avoid silent Bluetooth default) + wav_rms
 
 # --- config (override via env) ---------------------------------------------
 export YDOTOOL_SOCKET="${YDOTOOL_SOCKET:-/run/ydotoold.sock}"
 MODEL="${VOICE_MODEL:-base}"          # base | small | small.en | medium ...
 AUTO_ENTER="${VOICE_AUTO_ENTER:-1}"   # 1 = submit automatically, 0 = leave text for review
+MIN_RMS="${VOICE_MIN_RMS:-30}"        # below this the capture is silence -> fail loudly
 # ---------------------------------------------------------------------------
 
 SND=/usr/share/sounds/freedesktop/stereo
@@ -35,7 +40,18 @@ if recording; then
   kill "$PID" 2>/dev/null
   for _ in $(seq 1 60); do kill -0 "$PID" 2>/dev/null || break; sleep 0.05; done
   kill_strays  # belt-and-suspenders: no recorder should survive the stop
-  beep_stop; note "Transcribing…"
+  beep_stop
+
+  # Silence guard (added 2026-06-21): the #1 recurring failure is a dead capture
+  # — usually a Bluetooth mic hijacking the default source. Detect it and FAIL
+  # LOUDLY instead of silently transcribing/typing nothing.
+  MIC_LABEL="$(cat "$MICFILE" 2>/dev/null || echo 'mic')"; rm -f "$MICFILE"
+  RMS="$(wav_rms "$WAV")"
+  if (( RMS < MIN_RMS )); then
+    note "No audio captured" "Mic '$MIC_LABEL' was silent (rms=$RMS). A Bluetooth mic may be hijacking input — set VOICE_SOURCE or disconnect it."
+    exit 0
+  fi
+  note "Transcribing…"
 
   TEXT="$(python3 "$DIR/transcribe.py" "$WAV" "$MODEL" 2>>"$LOG")"
   # trim leading/trailing whitespace
@@ -63,13 +79,17 @@ if recording; then
 else
   # ---- START: detach a recorder that survives this script exiting ----
   kill_strays            # clear any orphan holding the mic before we begin
-  rm -f "$WAV" "$PIDFILE"
-  setsid pw-record --rate 16000 --channels 1 --format s16 "$WAV" >/dev/null 2>/dev/null &
+  rm -f "$WAV" "$PIDFILE" "$MICFILE"
+  if ! choose_mic; then
+    note "Mic error" "No working capture device found (only Bluetooth?). Check the microphone."; exit 1
+  fi
+  printf '%s' "$MIC_LABEL" > "$MICFILE"
+  setsid pw-record --target "$MIC_TARGET" --rate 16000 --channels 1 --format s16 "$WAV" >/dev/null 2>/dev/null &
   REC=$!
   sleep 0.15
   if ! kill -0 "$REC" 2>/dev/null; then
     note "Mic error" "Recorder failed to start — check the microphone."; exit 1
   fi
   echo "$REC" > "$PIDFILE"
-  beep_start; note "Listening…" "Super+Z again to send"
+  beep_start; note "Listening… ($MIC_LABEL)" "Super+Z again to send"
 fi
