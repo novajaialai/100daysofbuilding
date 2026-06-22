@@ -1,0 +1,19 @@
+{
+  "title": "Voice dictation — Right-Command tap → F18",
+  "rules": [
+    {
+      "description": "Right Command alone → F18 (dictation); still Command when held with other keys",
+      "manipulators": [
+        {
+          "type": "basic",
+          "from": {
+            "key_code": "right_command",
+            "modifiers": { "optional": ["any"] }
+          },
+          "to": [ { "key_code": "right_command", "lazy": true } ],
+          "to_if_alone": [ { "key_code": "f18" } ]
+        }
+      ]
+    }
+  ]
+}
