@@ -1,0 +1,14 @@
+[Unit]
+Description=Voice dictation daemon (keeps faster-whisper warm)
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/voice/.venv/bin/python3 %h/voice/voice-daemon.py
+Restart=on-failure
+RestartSec=3
+StandardOutput=append:%h/voice/voice-daemon.log
+StandardError=append:%h/voice/voice-daemon.log
+
+[Install]
+WantedBy=default.target
