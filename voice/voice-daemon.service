@@ -9,6 +9,11 @@ Restart=on-failure
 RestartSec=3
 StandardOutput=append:%h/voice/voice-daemon.log
 StandardError=append:%h/voice/voice-daemon.log
+# Pin to the 4 P-cores (8 threads incl. hyperthreads) on the i5-1240P so the
+# scheduler never lands inference on a slow E-core; Nice=-10 keeps it ahead
+# of background load (browser, backups) at the moment you stop talking.
+CPUAffinity=0-7
+Nice=-10
 
 [Install]
 WantedBy=default.target

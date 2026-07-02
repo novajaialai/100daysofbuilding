@@ -32,11 +32,21 @@ log = logging.getLogger("voice-daemon")
 
 def load_model():
     model_name = os.environ.get("VOICE_MODEL", "base")
-    log.info("loading faster-whisper model '%s' (cpu, int8)…", model_name)
+    threads = int(os.environ.get("VOICE_CPU_THREADS", "8"))
+    log.info("loading faster-whisper model '%s' (cpu, int8, threads=%d)…", model_name, threads)
     t0 = time.monotonic()
     from faster_whisper import WhisperModel
-    m = WhisperModel(model_name, device="cpu", compute_type="int8")
+    m = WhisperModel(model_name, device="cpu", compute_type="int8", cpu_threads=threads)
     log.info("model ready in %.1fs", time.monotonic() - t0)
+
+    # Warm up CTranslate2 kernels/page cache with a throwaway inference so the
+    # first real request doesn't pay first-call JIT/cache-miss cost.
+    t1 = time.monotonic()
+    import numpy as np
+    silence = np.zeros(16000, dtype=np.float32)  # 1s of silence
+    list(m.transcribe(silence, language="en", vad_filter=True, beam_size=1)[0])
+    log.info("warm-up inference done in %.1fs", time.monotonic() - t1)
+
     return m, model_name
 
 

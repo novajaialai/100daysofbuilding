@@ -56,13 +56,14 @@ kill_strays(){ pkill -f "pw-record .*${WAV}" 2>/dev/null || true; }
 DAEMON_SOCK="$RUNTIME/voice-daemon.sock"
 transcribe_wav() {
   local wav="$1" model="$2"
-  if [[ -S "$DAEMON_SOCK" ]] && command -v socat &>/dev/null; then
+  if [[ -S "$DAEMON_SOCK" ]]; then
     local resp
-    resp=$(printf '%s\n' "$wav" | timeout 60 socat - "UNIX-CONNECT:$DAEMON_SOCK" 2>/dev/null || echo "")
+    resp="$("$PYTHON" "$DIR/daemon_client.py" "$wav" "$DAEMON_SOCK" 2>>"$LOG")"
     if [[ "$resp" == TRANSCRIPT:* ]]; then
       echo "${resp#TRANSCRIPT: }"
       return 0
     fi
+    echo "voice.sh: daemon gave no usable reply (got: ${resp:0:80}), falling back to cold-load" >>"$LOG"
   fi
   # Fallback: cold-load (always works, ~1-2s slower)
   "$PYTHON" "$DIR/transcribe.py" "$wav" "$model" 2>>"$LOG"

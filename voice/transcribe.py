@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """AI Pilled Voice — transcribe a wav to a single line of text (faster-whisper, CPU, local)."""
-import sys
+import os, sys
 from faster_whisper import WhisperModel
 
 wav = sys.argv[1]
 name = sys.argv[2] if len(sys.argv) > 2 else "base"
 
-model = WhisperModel(name, device="cpu", compute_type="int8")
+model = WhisperModel(name, device="cpu", compute_type="int8",
+                      cpu_threads=int(os.environ.get("VOICE_CPU_THREADS", "8")))
 segments, _info = model.transcribe(wav, language="en", vad_filter=True, beam_size=1)
 
 text = " ".join(seg.text.strip() for seg in segments)
