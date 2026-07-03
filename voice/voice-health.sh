@@ -19,23 +19,35 @@ echo ""
 echo "Voice Health Check — $(date '+%Y-%m-%d %H:%M')"
 echo "────────────────────────────────────────────────"
 
-# 1. ydotoold
+# 1. ydotoold — only expected on ydotool builds that ship a separate daemon
+# (e.g. Fedora's). Older builds (Ubuntu/Debian's apt package) have no
+# ydotoold at all and fall back to writing /dev/uinput directly — that's a
+# supported, working mode, just report it instead of failing on it.
 echo ""
-echo "  Input injection (ydotoold)"
-if systemctl is-active --quiet ydotoold 2>/dev/null; then
-  ok "ydotoold service running"
-else
-  fail "ydotoold not running — fix: sudo systemctl start ydotoold"
-fi
-if [[ -S "$YDOTOOL_SOCK" ]]; then
-  ok "socket $YDOTOOL_SOCK exists"
-  if YDOTOOL_SOCKET="$YDOTOOL_SOCK" ydotool type "" 2>/dev/null; then
-    ok "ydotool type responds"
+echo "  Input injection (ydotool)"
+if command -v ydotoold &>/dev/null; then
+  if systemctl is-active --quiet ydotoold 2>/dev/null; then
+    ok "ydotoold service running"
   else
-    fail "ydotool type failed — socket exists but ydotoold may be hung; try: sudo systemctl restart ydotoold"
+    fail "ydotoold not running — fix: sudo systemctl start ydotoold"
+  fi
+  if [[ -S "$YDOTOOL_SOCK" ]]; then
+    ok "socket $YDOTOOL_SOCK exists"
+    if YDOTOOL_SOCKET="$YDOTOOL_SOCK" ydotool type "" 2>/dev/null; then
+      ok "ydotool type responds"
+    else
+      fail "ydotool type failed — socket exists but ydotoold may be hung; try: sudo systemctl restart ydotoold"
+    fi
+  else
+    fail "socket $YDOTOOL_SOCK missing — fix: sudo systemctl start ydotoold"
   fi
 else
-  fail "socket $YDOTOOL_SOCK missing — fix: sudo systemctl start ydotoold"
+  info "this ydotool build has no daemon — using its built-in uinput fallback"
+  if YDOTOOL_SOCKET="$YDOTOOL_SOCK" ydotool type "" 2>/dev/null; then
+    ok "ydotool type responds (uinput fallback)"
+  else
+    fail "ydotool type failed — check the user is in the 'input'/'uinput' group and /dev/uinput is readable"
+  fi
 fi
 
 # 2. PipeWire / mic
